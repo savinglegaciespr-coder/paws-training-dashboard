@@ -116,11 +116,13 @@ export default function App() {
     update("empleados", e);
   };
 
-  if (!loaded) return (
+ if (!loaded || !data || !Array.isArray(data.empleados)) {
+  return (
     <div style={{ background: COLORS.bg, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <p style={{ color: COLORS.textMuted, fontFamily: "monospace", fontSize: 14 }}>🐾 Cargando panel...</p>
     </div>
   );
+}
 
   const { ingresoEntrenamiento, ingresoGuarderia, ingresoGrooming, ingresoOtros,
     renta, electricidad, agua, internet, seguro, suministros, marketing, otrosGastos,
