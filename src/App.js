@@ -1,5 +1,19 @@
 import { useState, useMemo, useEffect } from "react";
+import { initializeApp } from "firebase/app";
+import { getFirestore, doc, setDoc, onSnapshot } from "firebase/firestore";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBUrIKQ5Af7p9UjXWxPyVcRpMo5qxUFF8o",
+  authDomain: "paws-training-panel-financiero.firebaseapp.com",
+  projectId: "paws-training-panel-financiero",
+  storageBucket: "paws-training-panel-financiero.firebasestorage.app",
+  messagingSenderId: "329482288579",
+  appId: "1:329482288579:web:597b60206be6f4c2399176",
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
 const COLORS = {
   bg: "#0D1117", card: "#161B22", cardBorder: "#21262D",
@@ -11,52 +25,18 @@ const COLORS = {
 };
 
 const DEFAULTS = {
-  ingresoEntrenamiento: 5625,
-  ingresoGuarderia: 0,
-  ingresoGrooming: 0,
-  ingresoOtros: 0,
-  renta: 1200,
-  electricidad: 300,
-  agua: 80,
-  internet: 80,
-  seguro: 200,
-  suministros: 200,
-  marketing: 100,
-  otrosGastos: 0,
+  ingresoEntrenamiento: 5625, ingresoGuarderia: 0, ingresoGrooming: 0, ingresoOtros: 0,
+  renta: 1200, electricidad: 300, agua: 80, internet: 80, seguro: 200, suministros: 200, marketing: 100, otrosGastos: 0,
   empleados: [
     { nombre: "Entrenador Principal", pago: 2200, horasSemana: 40, tipo: "1099" },
     { nombre: "Asistente de Limpieza", pago: 1200, horasSemana: 40, tipo: "1099" },
     { nombre: "Asistente 2", pago: 1100, horasSemana: 35, tipo: "1099" },
   ],
-  capacidadActual: 15,
-  ocupacionActual: 15,
-  precioPromedio: 375,
-  nuevaContratacion: 1500,
-};
-
-const load = (key, fallback) => {
-  try {
-    const v = localStorage.getItem("paws_" + key);
-    return v !== null ? JSON.parse(v) : fallback;
-  } catch { return fallback; }
-};
-
-const save = (key, value) => {
-  try { localStorage.setItem("paws_" + key, JSON.stringify(value)); } catch {}
+  capacidadActual: 15, ocupacionActual: 15, precioPromedio: 375, nuevaContratacion: 1500,
 };
 
 const fmt = (n) => `$${Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 const fmtPct = (n) => `${Number(n || 0).toFixed(1)}%`;
-
-const usePersistedState = (key, defaultValue) => {
-  const [state, setState] = useState(() => load(key, defaultValue));
-  const set = (val) => {
-    const v = typeof val === "function" ? val(state) : val;
-    setState(v);
-    save(key, v);
-  };
-  return [state, set];
-};
 
 const InputField = ({ label, value, onChange, prefix = "$", sublabel }) => (
   <div style={{ marginBottom: 12 }}>
@@ -69,17 +49,12 @@ const InputField = ({ label, value, onChange, prefix = "$", sublabel }) => (
   </div>
 );
 
-const StatCard = ({ label, value, sub, color = COLORS.text, icon }) => (
+const StatCard = ({ label, value, sub, color = COLORS.text }) => (
   <div style={{ background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`, borderRadius: 10, padding: "14px 16px", position: "relative", overflow: "hidden" }}>
     <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: color, opacity: 0.7 }} />
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-      <div>
-        <p style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6, fontFamily: "monospace" }}>{label}</p>
-        <p style={{ fontSize: 22, fontWeight: 700, color, fontFamily: "monospace", lineHeight: 1 }}>{value}</p>
-        {sub && <p style={{ fontSize: 10, color: COLORS.textMuted, marginTop: 5 }}>{sub}</p>}
-      </div>
-      {icon && <div style={{ opacity: 0.3 }}>{icon}</div>}
-    </div>
+    <p style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6, fontFamily: "monospace" }}>{label}</p>
+    <p style={{ fontSize: 22, fontWeight: 700, color, fontFamily: "monospace", lineHeight: 1 }}>{value}</p>
+    {sub && <p style={{ fontSize: 10, color: COLORS.textMuted, marginTop: 5 }}>{sub}</p>}
   </div>
 );
 
@@ -102,44 +77,58 @@ const TABS = ["💰 Ingresos", "👥 Nómina", "📊 Análisis", "🚀 Crecimien
 export default function App() {
   const [tab, setTab] = useState(0);
   const [showReset, setShowReset] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [data, setData] = useState(DEFAULTS);
+  const [loaded, setLoaded] = useState(false);
 
-  const [ingresoEntrenamiento, setIngresoEntrenamiento] = usePersistedState("ingresoEntrenamiento", DEFAULTS.ingresoEntrenamiento);
-  const [ingresoGuarderia, setIngresoGuarderia] = usePersistedState("ingresoGuarderia", DEFAULTS.ingresoGuarderia);
-  const [ingresoGrooming, setIngresoGrooming] = usePersistedState("ingresoGrooming", DEFAULTS.ingresoGrooming);
-  const [ingresoOtros, setIngresoOtros] = usePersistedState("ingresoOtros", DEFAULTS.ingresoOtros);
-  const [renta, setRenta] = usePersistedState("renta", DEFAULTS.renta);
-  const [electricidad, setElectricidad] = usePersistedState("electricidad", DEFAULTS.electricidad);
-  const [agua, setAgua] = usePersistedState("agua", DEFAULTS.agua);
-  const [internet, setInternet] = usePersistedState("internet", DEFAULTS.internet);
-  const [seguro, setSeguro] = usePersistedState("seguro", DEFAULTS.seguro);
-  const [suministros, setSuministros] = usePersistedState("suministros", DEFAULTS.suministros);
-  const [marketing, setMarketing] = usePersistedState("marketing", DEFAULTS.marketing);
-  const [otrosGastos, setOtrosGastos] = usePersistedState("otrosGastos", DEFAULTS.otrosGastos);
-  const [empleados, setEmpleados] = usePersistedState("empleados", DEFAULTS.empleados);
-  const [capacidadActual, setCapacidadActual] = usePersistedState("capacidadActual", DEFAULTS.capacidadActual);
-  const [ocupacionActual, setOcupacionActual] = usePersistedState("ocupacionActual", DEFAULTS.ocupacionActual);
-  const [precioPromedio, setPrecioPromedio] = usePersistedState("precioPromedio", DEFAULTS.precioPromedio);
-  const [nuevaContratacion, setNuevaContratacion] = usePersistedState("nuevaContratacion", DEFAULTS.nuevaContratacion);
+  useEffect(() => {
+    const ref = doc(db, "negocios", "paws-training");
+    const unsub = onSnapshot(ref, (snap) => {
+      if (snap.exists()) setData({ ...DEFAULTS, ...snap.data() });
+      setLoaded(true);
+    });
+    return () => unsub();
+  }, []);
 
-  const handleReset = () => {
-    Object.keys(DEFAULTS).forEach(k => localStorage.removeItem("paws_" + k));
-    window.location.reload();
+  const saveToFirebase = async (newData) => {
+    setSyncing(true);
+    try { await setDoc(doc(db, "negocios", "paws-training"), newData); } catch (e) { console.error(e); }
+    setTimeout(() => setSyncing(false), 1000);
   };
 
-  const addEmpleado = () => setEmpleados([...empleados, { nombre: "Nuevo Empleado", pago: 1200, horasSemana: 40, tipo: "1099" }]);
-  const removeEmpleado = (i) => setEmpleados(empleados.filter((_, idx) => idx !== i));
+  const update = (field, value) => {
+    const newData = { ...data, [field]: value };
+    setData(newData);
+    saveToFirebase(newData);
+  };
+
+  const handleReset = async () => {
+    setData(DEFAULTS);
+    await saveToFirebase(DEFAULTS);
+    setShowReset(false);
+  };
+
+  const addEmpleado = () => update("empleados", [...data.empleados, { nombre: "Nuevo Empleado", pago: 1200, horasSemana: 40, tipo: "1099" }]);
+  const removeEmpleado = (i) => update("empleados", data.empleados.filter((_, idx) => idx !== i));
   const updateEmpleado = (i, field, val) => {
-    const updated = [...empleados];
-    updated[i][field] = field === "pago" || field === "horasSemana" ? Number(val) : val;
-    setEmpleados(updated);
+    const e = [...data.empleados];
+    e[i] = { ...e[i], [field]: field === "pago" || field === "horasSemana" ? Number(val) : val };
+    update("empleados", e);
   };
+
+  if (!loaded) return (
+    <div style={{ background: COLORS.bg, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <p style={{ color: COLORS.textMuted, fontFamily: "monospace", fontSize: 14 }}>🐾 Cargando panel...</p>
+    </div>
+  );
+
+  const { ingresoEntrenamiento, ingresoGuarderia, ingresoGrooming, ingresoOtros,
+    renta, electricidad, agua, internet, seguro, suministros, marketing, otrosGastos,
+    empleados, capacidadActual, ocupacionActual, precioPromedio, nuevaContratacion } = data;
 
   const totalIngresos = ingresoEntrenamiento + ingresoGuarderia + ingresoGrooming + ingresoOtros;
   const totalNomina = empleados.reduce((s, e) => s + e.pago, 0);
-  const costoNominaTotal = empleados.reduce((s, e) => {
-    const cargas = e.tipo === "W-2" ? e.pago * 0.15 : 0;
-    return s + e.pago + cargas;
-  }, 0);
+  const costoNominaTotal = empleados.reduce((s, e) => s + e.pago + (e.tipo === "W-2" ? e.pago * 0.15 : 0), 0);
   const gastosFijos = renta + electricidad + agua + internet + seguro + suministros + marketing + otrosGastos;
   const totalGastos = costoNominaTotal + gastosFijos;
   const utilidad = totalIngresos - totalGastos;
@@ -173,15 +162,12 @@ export default function App() {
     { label: "Otros", value: otrosGastos, color: COLORS.textMuted },
   ].filter(g => g.value > 0);
 
-  const styles = {
-    grid2: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16 },
-    grid4: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 16 },
-    grid3: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 },
-  };
+  const g2 = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16 };
+  const g4 = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 16 };
+  const g3 = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 };
 
   return (
     <div style={{ background: COLORS.bg, minHeight: "100vh", fontFamily: "monospace", color: COLORS.text, paddingBottom: 40 }}>
-      {/* HEADER */}
       <div style={{ background: COLORS.card, borderBottom: `1px solid ${COLORS.cardBorder}`, padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100, flexWrap: "wrap", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <svg width="24" height="24" viewBox="0 0 24 24" fill={COLORS.accent}>
@@ -195,21 +181,21 @@ export default function App() {
           </div>
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontSize: 10, color: syncing ? COLORS.textMuted : COLORS.green, fontFamily: "monospace" }}>
+            {syncing ? "💾 Guardando..." : "☁️ Sincronizado"}
+          </span>
           <Badge label={statusLabel} color={statusColor} />
           <Badge label={`${empleados.length} empleados`} color={COLORS.blue} />
-          <button onClick={() => setShowReset(true)} style={{ background: COLORS.redSoft, border: `1px solid ${COLORS.red}40`, borderRadius: 6, color: COLORS.red, cursor: "pointer", padding: "4px 10px", fontSize: 10, fontFamily: "monospace" }}>
-            🔄 Reset
-          </button>
+          <button onClick={() => setShowReset(true)} style={{ background: COLORS.redSoft, border: `1px solid ${COLORS.red}40`, borderRadius: 6, color: COLORS.red, cursor: "pointer", padding: "4px 10px", fontSize: 10, fontFamily: "monospace" }}>🔄 Reset</button>
         </div>
       </div>
 
-      {/* RESET MODAL */}
       {showReset && (
         <div style={{ position: "fixed", inset: 0, background: "#000000AA", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
           <div style={{ background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`, borderRadius: 12, padding: 24, maxWidth: 340, width: "100%", textAlign: "center" }}>
             <p style={{ fontSize: 24, marginBottom: 8 }}>⚠️</p>
             <p style={{ fontSize: 14, fontWeight: 700, color: COLORS.text, marginBottom: 8 }}>¿Borrar todos los datos?</p>
-            <p style={{ fontSize: 12, color: COLORS.textMuted, marginBottom: 20 }}>Esto eliminará toda la información ingresada y restaurará los valores iniciales.</p>
+            <p style={{ fontSize: 12, color: COLORS.textMuted, marginBottom: 20 }}>Esto eliminará toda la información en todos los dispositivos.</p>
             <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
               <button onClick={() => setShowReset(false)} style={{ padding: "8px 20px", background: "transparent", border: `1px solid ${COLORS.cardBorder}`, borderRadius: 6, color: COLORS.textMuted, cursor: "pointer", fontFamily: "monospace", fontSize: 12 }}>Cancelar</button>
               <button onClick={handleReset} style={{ padding: "8px 20px", background: COLORS.red, border: "none", borderRadius: 6, color: "#fff", cursor: "pointer", fontFamily: "monospace", fontSize: 12, fontWeight: 700 }}>Sí, borrar todo</button>
@@ -219,55 +205,48 @@ export default function App() {
       )}
 
       <div style={{ padding: "16px 16px 0" }}>
-        {/* KPI CARDS */}
-        <div style={styles.grid4}>
+        <div style={g4}>
           <StatCard label="Ingresos Mensuales" value={fmt(totalIngresos)} sub="Total bruto" color={COLORS.green} />
           <StatCard label="Gastos Totales" value={fmt(totalGastos)} sub="Nómina + Fijos" color={COLORS.red} />
           <StatCard label="Utilidad Neta" value={fmt(utilidad)} sub={`Margen: ${fmtPct(margen)}`} color={statusColor} />
           <StatCard label="Punto de Equilibrio" value={fmt(totalGastos)} sub={`${perrosParaEquilibrio} perros/mes`} color={COLORS.accent} />
         </div>
 
-        {/* TABS */}
         <div style={{ display: "flex", gap: 4, marginBottom: 16, background: COLORS.card, padding: 4, borderRadius: 8, border: `1px solid ${COLORS.cardBorder}`, overflowX: "auto" }}>
           {TABS.map((t, i) => (
-            <button key={i} onClick={() => setTab(i)} style={{ padding: "7px 12px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 11, fontFamily: "monospace", fontWeight: 600, background: tab === i ? COLORS.accent : "transparent", color: tab === i ? COLORS.bg : COLORS.textMuted, whiteSpace: "nowrap", flex: 1 }}>
-              {t}
-            </button>
+            <button key={i} onClick={() => setTab(i)} style={{ padding: "7px 12px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 11, fontFamily: "monospace", fontWeight: 600, background: tab === i ? COLORS.accent : "transparent", color: tab === i ? COLORS.bg : COLORS.textMuted, whiteSpace: "nowrap", flex: 1 }}>{t}</button>
           ))}
         </div>
 
-        {/* TAB: INGRESOS */}
         {tab === 0 && (
-          <div style={styles.grid2}>
+          <div style={g2}>
             <Section title="Fuentes de Ingreso" icon="💵">
-             <InputField label="Entrenamiento" value={ingresoEntrenamiento} onChange={setIngresoEntrenamiento} sublabel={`$${precioPromedio} x ${ocupacionActual} perros = ${fmt(precioPromedio * ocupacionActual)}`} />
-              <InputField label="Guardería / Boarding" value={ingresoGuarderia} onChange={setIngresoGuarderia} />
-              <InputField label="Grooming / Baños" value={ingresoGrooming} onChange={setIngresoGrooming} />
-              <InputField label="Otros Servicios" value={ingresoOtros} onChange={setIngresoOtros} />
+              <InputField label="Entrenamiento" value={ingresoEntrenamiento} onChange={(v) => update("ingresoEntrenamiento", v)} sublabel={`$${precioPromedio} x ${ocupacionActual} perros = ${fmt(precioPromedio * ocupacionActual)}`} />
+              <InputField label="Guardería / Boarding" value={ingresoGuarderia} onChange={(v) => update("ingresoGuarderia", v)} />
+              <InputField label="Grooming / Baños" value={ingresoGrooming} onChange={(v) => update("ingresoGrooming", v)} />
+              <InputField label="Otros Servicios" value={ingresoOtros} onChange={(v) => update("ingresoOtros", v)} />
               <div style={{ background: COLORS.greenSoft, border: `1px solid ${COLORS.green}40`, borderRadius: 8, padding: "10px 14px", marginTop: 8 }}>
                 <p style={{ fontSize: 11, color: COLORS.textMuted, marginBottom: 2 }}>TOTAL INGRESOS</p>
                 <p style={{ fontSize: 22, fontWeight: 700, color: COLORS.green }}>{fmt(totalIngresos)}</p>
               </div>
             </Section>
-
             <Section title="Gastos Fijos Operativos" icon="🏠">
-              <InputField label="Renta / Local" value={renta} onChange={setRenta} />
-              <InputField label="Electricidad" value={electricidad} onChange={setElectricidad} />
-              <InputField label="Agua" value={agua} onChange={setAgua} />
-              <InputField label="Internet / Teléfono" value={internet} onChange={setInternet} />
-              <InputField label="Seguro" value={seguro} onChange={setSeguro} />
-              <InputField label="Suministros / Insumos" value={suministros} onChange={setSuministros} />
-              <InputField label="Marketing / Redes" value={marketing} onChange={setMarketing} />
-              <InputField label="Otros Gastos" value={otrosGastos} onChange={setOtrosGastos} />
+              <InputField label="Renta / Local" value={renta} onChange={(v) => update("renta", v)} />
+              <InputField label="Electricidad" value={electricidad} onChange={(v) => update("electricidad", v)} />
+              <InputField label="Agua" value={agua} onChange={(v) => update("agua", v)} />
+              <InputField label="Internet / Teléfono" value={internet} onChange={(v) => update("internet", v)} />
+              <InputField label="Seguro" value={seguro} onChange={(v) => update("seguro", v)} />
+              <InputField label="Suministros / Insumos" value={suministros} onChange={(v) => update("suministros", v)} />
+              <InputField label="Marketing / Redes" value={marketing} onChange={(v) => update("marketing", v)} />
+              <InputField label="Otros Gastos" value={otrosGastos} onChange={(v) => update("otrosGastos", v)} />
               <div style={{ background: COLORS.redSoft, border: `1px solid ${COLORS.red}40`, borderRadius: 8, padding: "10px 14px", marginTop: 8 }}>
                 <p style={{ fontSize: 11, color: COLORS.textMuted, marginBottom: 2 }}>TOTAL GASTOS FIJOS</p>
                 <p style={{ fontSize: 22, fontWeight: 700, color: COLORS.red }}>{fmt(gastosFijos)}</p>
               </div>
             </Section>
-
             <div style={{ gridColumn: "1 / -1" }}>
               <Section title="Desglose de Gastos" icon="🥧">
-                <div style={styles.grid2}>
+                <div style={g2}>
                   <div>
                     {gastosPie.map((g, i) => {
                       const pct = totalGastos > 0 ? (g.value / totalGastos) * 100 : 0;
@@ -306,7 +285,6 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB: NÓMINA */}
         {tab === 1 && (
           <div>
             <Section title="Empleados / Contratistas" icon="👤">
@@ -323,25 +301,17 @@ export default function App() {
                         <input type="number" value={emp.pago} onChange={(e) => updateEmpleado(i, "pago", e.target.value)} style={{ background: "transparent", border: "none", outline: "none", color: COLORS.accent, fontSize: 13, fontFamily: "monospace", fontWeight: 700, width: 70 }} />
                       </div>
                       <input type="number" value={emp.horasSemana} onChange={(e) => updateEmpleado(i, "horasSemana", e.target.value)} style={{ background: "transparent", border: "none", outline: "none", color: COLORS.blue, fontSize: 12, fontFamily: "monospace", width: 35 }} />
-                      <button onClick={() => updateEmpleado(i, "tipo", emp.tipo === "1099" ? "W-2" : "1099")}
-                        style={{ padding: "3px 8px", borderRadius: 20, border: `1px solid ${emp.tipo === "1099" ? COLORS.green : COLORS.accent}50`, background: emp.tipo === "1099" ? COLORS.greenSoft : COLORS.accentSoft, color: emp.tipo === "1099" ? COLORS.green : COLORS.accent, cursor: "pointer", fontSize: 10, fontFamily: "monospace", fontWeight: 700 }}>
-                        {emp.tipo}
-                      </button>
+                      <button onClick={() => updateEmpleado(i, "tipo", emp.tipo === "1099" ? "W-2" : "1099")} style={{ padding: "3px 8px", borderRadius: 20, border: `1px solid ${emp.tipo === "1099" ? COLORS.green : COLORS.accent}50`, background: emp.tipo === "1099" ? COLORS.greenSoft : COLORS.accentSoft, color: emp.tipo === "1099" ? COLORS.green : COLORS.accent, cursor: "pointer", fontSize: 10, fontFamily: "monospace", fontWeight: 700 }}>{emp.tipo}</button>
                       <button onClick={() => removeEmpleado(i)} style={{ background: COLORS.redSoft, border: "none", borderRadius: 4, color: COLORS.red, cursor: "pointer", padding: "4px 8px", fontSize: 12 }}>✕</button>
                     </div>
                   ))}
                 </div>
               </div>
-              <p style={{ fontSize: 10, color: COLORS.textDim, marginBottom: 8, marginTop: 4 }}>
-                💡 Toca el botón <strong style={{ color: COLORS.green }}>1099</strong> o <strong style={{ color: COLORS.accent }}>W-2</strong> para cambiar el tipo. Los contratistas 1099 no tienen cargas patronales.
-              </p>
-              <button onClick={addEmpleado} style={{ width: "100%", padding: 10, background: COLORS.accentSoft, border: `1px dashed ${COLORS.accent}60`, borderRadius: 8, color: COLORS.accent, cursor: "pointer", fontSize: 12, fontFamily: "monospace" }}>
-                + Agregar Empleado / Contratista
-              </button>
+              <p style={{ fontSize: 10, color: COLORS.textDim, marginBottom: 8, marginTop: 4 }}>💡 Toca <strong style={{ color: COLORS.green }}>1099</strong> o <strong style={{ color: COLORS.accent }}>W-2</strong> para cambiar. Los 1099 no tienen cargas patronales.</p>
+              <button onClick={addEmpleado} style={{ width: "100%", padding: 10, background: COLORS.accentSoft, border: `1px dashed ${COLORS.accent}60`, borderRadius: 8, color: COLORS.accent, cursor: "pointer", fontSize: 12, fontFamily: "monospace" }}>+ Agregar Empleado / Contratista</button>
             </Section>
-
             <Section title="Costo Laboral Total" icon="💼">
-              <div style={styles.grid3}>
+              <div style={g3}>
                 {empleados.map((emp, i) => {
                   const cargas = emp.tipo === "W-2" ? emp.pago * 0.15 : 0;
                   const costo = emp.pago + cargas;
@@ -364,7 +334,6 @@ export default function App() {
                         <span style={{ fontSize: 11, color: COLORS.textMuted }}>Costo total</span>
                         <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.accent }}>{fmt(costo)}</span>
                       </div>
-                      <p style={{ fontSize: 10, color: COLORS.textDim, marginTop: 4 }}>{fmtPct(totalIngresos > 0 ? (costo / totalIngresos) * 100 : 0)} de ingresos</p>
                     </div>
                   );
                 })}
@@ -377,20 +346,18 @@ export default function App() {
                 <div style={{ background: COLORS.redSoft, borderRadius: 8, padding: 14, border: `1px solid ${COLORS.red}40` }}>
                   <p style={{ fontSize: 11, color: COLORS.textMuted }}>Costo real total</p>
                   <p style={{ fontSize: 20, fontWeight: 700, color: COLORS.red }}>{fmt(costoNominaTotal)}</p>
-                  <p style={{ fontSize: 10, color: COLORS.textDim }}>{fmtPct(totalIngresos > 0 ? (costoNominaTotal / totalIngresos) * 100 : 0)} de ingresos</p>
                 </div>
               </div>
             </Section>
           </div>
         )}
 
-        {/* TAB: ANÁLISIS */}
         {tab === 2 && (
-          <div style={styles.grid2}>
+          <div style={g2}>
             <Section title="Capacidad Instalada" icon="🐕">
-              <InputField label="Capacidad máxima (perros/mes)" value={capacidadActual} onChange={setCapacidadActual} prefix="🐾" />
-              <InputField label="Ocupación actual (perros/mes)" value={ocupacionActual} onChange={setOcupacionActual} prefix="🐾" />
-              <InputField label="Precio promedio por perro/mes" value={precioPromedio} onChange={setPrecioPromedio} />
+              <InputField label="Capacidad máxima (perros/mes)" value={capacidadActual} onChange={(v) => update("capacidadActual", v)} prefix="🐾" />
+              <InputField label="Ocupación actual (perros/mes)" value={ocupacionActual} onChange={(v) => update("ocupacionActual", v)} prefix="🐾" />
+              <InputField label="Precio promedio por perro/mes" value={precioPromedio} onChange={(v) => update("precioPromedio", v)} />
               <div style={{ marginTop: 12 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                   <span style={{ fontSize: 12, color: COLORS.textMuted }}>Ocupación</span>
@@ -411,17 +378,12 @@ export default function App() {
                 {ocupacionPct >= 90 && <p style={{ fontSize: 12, color: COLORS.red }}>🔴 Saturado. Expande capacidad ya.</p>}
               </div>
             </Section>
-
             <Section title="¿Puedo Contratar?" icon="🤔">
-              <InputField label="Pago mensual estimado nuevo empleado" value={nuevaContratacion} onChange={setNuevaContratacion} />
+              <InputField label="Pago mensual estimado nuevo empleado" value={nuevaContratacion} onChange={(v) => update("nuevaContratacion", v)} />
               <div style={{ background: puedeContratar ? COLORS.greenSoft : COLORS.redSoft, border: `1px solid ${puedeContratar ? COLORS.green : COLORS.red}50`, borderRadius: 10, padding: 16, marginBottom: 14, textAlign: "center" }}>
                 <p style={{ fontSize: 24, marginBottom: 4 }}>{puedeContratar ? "✅" : "⚠️"}</p>
-                <p style={{ fontSize: 15, fontWeight: 700, color: puedeContratar ? COLORS.green : COLORS.red }}>
-                  {puedeContratar ? "SÍ PUEDES CONTRATAR" : "AÚN NO ES RECOMENDABLE"}
-                </p>
-                <p style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 4 }}>
-                  {puedeContratar ? "Tu utilidad cubre el costo del nuevo empleado" : `Te faltan ${fmt(ingresoExtraNeeded - utilidad)}`}
-                </p>
+                <p style={{ fontSize: 15, fontWeight: 700, color: puedeContratar ? COLORS.green : COLORS.red }}>{puedeContratar ? "SÍ PUEDES CONTRATAR" : "AÚN NO ES RECOMENDABLE"}</p>
+                <p style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 4 }}>{puedeContratar ? "Tu utilidad cubre el costo del nuevo empleado" : `Te faltan ${fmt(ingresoExtraNeeded - utilidad)}`}</p>
               </div>
               {[
                 ["Costo estimado contratación", fmt(ingresoExtraNeeded), COLORS.red],
@@ -435,15 +397,12 @@ export default function App() {
               ))}
               <div style={{ background: COLORS.accentSoft, borderRadius: 8, padding: 12, marginTop: 14 }}>
                 <p style={{ fontSize: 11, color: COLORS.accent, fontWeight: 600, marginBottom: 6 }}>💡 REGLA DE ORO</p>
-                <p style={{ fontSize: 11, color: COLORS.textMuted, lineHeight: 1.6 }}>
-                  Contrata cuando tu utilidad cubra <strong style={{ color: COLORS.text }}>3 meses</strong> del costo completo del nuevo empleado.
-                </p>
+                <p style={{ fontSize: 11, color: COLORS.textMuted, lineHeight: 1.6 }}>Contrata cuando tu utilidad cubra <strong style={{ color: COLORS.text }}>3 meses</strong> del costo completo del nuevo empleado.</p>
               </div>
             </Section>
-
             <div style={{ gridColumn: "1 / -1" }}>
               <Section title="Punto de Equilibrio Visual" icon="⚖️">
-                <div style={{ height: 220, overflowX: "auto" }}>
+                <div style={{ height: 220 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={[
                       { name: "Ingresos", valor: totalIngresos },
@@ -465,15 +424,14 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB: CRECIMIENTO */}
         {tab === 3 && (
           <div>
             <Section title="Proyección a 12 Meses" icon="📈">
-              <div style={styles.grid3}>
+              <div style={g3}>
                 {[
-                 { label: "Conservador", sub: "+2%/mes", color: COLORS.blue, desc: `+2% de ingresos mensual ≈ +${Math.ceil(ocupacionActual * 0.02)} perro(s)/mes sobre los ${ocupacionActual} actuales.` },
-{ label: "Moderado", sub: "+5%/mes", color: COLORS.accent, desc: `+5% de ingresos mensual ≈ +${Math.ceil(ocupacionActual * 0.05)} perro(s)/mes sobre los ${ocupacionActual} actuales.` },
-{ label: "Agresivo", sub: "+9%/mes", color: COLORS.green, desc: `+9% de ingresos mensual ≈ +${Math.ceil(ocupacionActual * 0.09)} perro(s)/mes sobre los ${ocupacionActual} actuales.` },
+                  { label: "Conservador", sub: "+2%/mes", color: COLORS.blue, desc: `+2% de ingresos mensual ≈ +${Math.ceil(ocupacionActual * 0.02)} perro(s)/mes sobre los ${ocupacionActual} actuales.` },
+                  { label: "Moderado", sub: "+5%/mes", color: COLORS.accent, desc: `+5% de ingresos mensual ≈ +${Math.ceil(ocupacionActual * 0.05)} perro(s)/mes sobre los ${ocupacionActual} actuales.` },
+                  { label: "Agresivo", sub: "+9%/mes", color: COLORS.green, desc: `+9% de ingresos mensual ≈ +${Math.ceil(ocupacionActual * 0.09)} perro(s)/mes sobre los ${ocupacionActual} actuales.` },
                 ].map(s => (
                   <div key={s.label} style={{ background: COLORS.bg, borderRadius: 8, padding: 14, border: `1px solid ${s.color}40` }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
@@ -482,13 +440,11 @@ export default function App() {
                       <Badge label={s.sub} color={s.color} />
                     </div>
                     <p style={{ fontSize: 11, color: COLORS.textMuted, lineHeight: 1.5, marginBottom: 8 }}>{s.desc}</p>
-                    <p style={{ fontSize: 16, fontWeight: 700, color: s.color }}>
-                      {fmt(proyeccion[11][s.label])} <span style={{ fontSize: 10, color: COLORS.textDim }}>mes 12</span>
-                    </p>
+                    <p style={{ fontSize: 16, fontWeight: 700, color: s.color }}>{fmt(proyeccion[11][s.label])} <span style={{ fontSize: 10, color: COLORS.textDim }}>mes 12</span></p>
                   </div>
                 ))}
               </div>
-              <div style={{ height: 240, marginTop: 16, overflowX: "auto" }}>
+              <div style={{ height: 240, marginTop: 16 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={proyeccion} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={COLORS.cardBorder} />
@@ -506,7 +462,7 @@ export default function App() {
             </Section>
 
             <Section title="Hitos de Crecimiento" icon="🎯">
-              <div style={styles.grid3}>
+              <div style={g3}>
                 {[
                   { label: "Empleado #4", meta: nuevaContratacion * 1.15, periodo: "3 meses", color: COLORS.accent },
                   { label: "Empleado #5", meta: nuevaContratacion * 2.3, periodo: "6 meses", color: COLORS.blue },
@@ -534,7 +490,6 @@ export default function App() {
                   );
                 })}
               </div>
-
               <div style={{ background: COLORS.accentSoft, border: `1px solid ${COLORS.accent}30`, borderRadius: 10, padding: 16, marginTop: 16 }}>
                 <p style={{ fontSize: 12, fontWeight: 700, color: COLORS.accent, marginBottom: 10 }}>📋 RESUMEN EJECUTIVO</p>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 8 }}>
