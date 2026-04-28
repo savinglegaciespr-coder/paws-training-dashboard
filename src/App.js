@@ -240,7 +240,7 @@ export default function App() {
         {tab === 0 && (
           <div style={styles.grid2}>
             <Section title="Fuentes de Ingreso" icon="💵">
-              <InputField label="Entrenamiento" value={ingresoEntrenamiento} onChange={setIngresoEntrenamiento} sublabel="$375 x 15 perros" />
+             <InputField label="Entrenamiento" value={ingresoEntrenamiento} onChange={setIngresoEntrenamiento} sublabel={`$${precioPromedio} x ${ocupacionActual} perros = ${fmt(precioPromedio * ocupacionActual)}`} />
               <InputField label="Guardería / Boarding" value={ingresoGuarderia} onChange={setIngresoGuarderia} />
               <InputField label="Grooming / Baños" value={ingresoGrooming} onChange={setIngresoGrooming} />
               <InputField label="Otros Servicios" value={ingresoOtros} onChange={setIngresoOtros} />
