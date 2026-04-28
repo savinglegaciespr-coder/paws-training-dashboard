@@ -471,9 +471,9 @@ export default function App() {
             <Section title="Proyección a 12 Meses" icon="📈">
               <div style={styles.grid3}>
                 {[
-                  { label: "Conservador", sub: "+2%/mes", color: COLORS.blue, desc: "Solo retención de clientes actuales." },
-                  { label: "Moderado", sub: "+5%/mes", color: COLORS.accent, desc: "Marketing activo y referidos." },
-                  { label: "Agresivo", sub: "+9%/mes", color: COLORS.green, desc: "Expansión y nuevo personal." },
+                 { label: "Conservador", sub: "+2%/mes", color: COLORS.blue, desc: `+2% de ingresos mensual ≈ +${Math.ceil(ocupacionActual * 0.02)} perro(s)/mes sobre los ${ocupacionActual} actuales.` },
+{ label: "Moderado", sub: "+5%/mes", color: COLORS.accent, desc: `+5% de ingresos mensual ≈ +${Math.ceil(ocupacionActual * 0.05)} perro(s)/mes sobre los ${ocupacionActual} actuales.` },
+{ label: "Agresivo", sub: "+9%/mes", color: COLORS.green, desc: `+9% de ingresos mensual ≈ +${Math.ceil(ocupacionActual * 0.09)} perro(s)/mes sobre los ${ocupacionActual} actuales.` },
                 ].map(s => (
                   <div key={s.label} style={{ background: COLORS.bg, borderRadius: 8, padding: 14, border: `1px solid ${s.color}40` }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
