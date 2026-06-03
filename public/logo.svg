@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Fondo redondeado -->
+  <rect width="512" height="512" rx="96" fill="#1A1A1A"/>
+  <!-- Pata centrada, escalada a 320x320 dentro de 512x512 -->
+  <svg x="96" y="96" width="320" height="320" viewBox="0 0 24 24">
+    <ellipse cx="6"  cy="7" rx="2"   ry="3"   fill="#6BBF3E"/>
+    <ellipse cx="18" cy="7" rx="2"   ry="3"   fill="#6BBF3E"/>
+    <ellipse cx="10" cy="4" rx="2"   ry="2.5" fill="#6BBF3E"/>
+    <ellipse cx="14" cy="4" rx="2"   ry="2.5" fill="#6BBF3E"/>
+    <path d="M12 10c-4 0-7 2.5-7 6 0 2.5 1.5 4 3.5 4 1 0 2-.5 3.5-.5s2.5.5 3.5.5c2 0 3.5-1.5 3.5-4 0-3.5-3-6-7-6z" fill="#6BBF3E"/>
+  </svg>
+</svg>
