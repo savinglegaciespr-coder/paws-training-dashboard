@@ -3,7 +3,6 @@ import { initializeApp } from "firebase/app";
 import { getFirestore, doc, setDoc, onSnapshot } from "firebase/firestore";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 
-const PAWS_TRACKER_LOGO = "data:image/jpeg;base64,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";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBUrIKQ5Af7p9UjXWxPyVcRpMo5qxUFF8o",
@@ -192,8 +191,12 @@ export default function App() {
   if (!loaded) return (
     <div style={{ background: COLORS.bg, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ textAlign: "center" }}>
-        <img src={PAWS_TRACKER_LOGO} alt="Paws Tracker" style={{ width: 72, height: 72, borderRadius: 12, objectFit: "cover", marginBottom: 12 }} />
-        <p style={{ color: COLORS.textMuted, fontFamily: "monospace", fontSize: 14 }}>Cargando Paws Tracker...</p>
+        <svg width="48" height="48" viewBox="0 0 24 24" fill={COLORS.accent} style={{ marginBottom: 12 }}>
+          <ellipse cx="6" cy="7" rx="2" ry="3" /><ellipse cx="18" cy="7" rx="2" ry="3" />
+          <ellipse cx="10" cy="4" rx="2" ry="2.5" /><ellipse cx="14" cy="4" rx="2" ry="2.5" />
+          <path d="M12 10c-4 0-7 2.5-7 6 0 2.5 1.5 4 3.5 4 1 0 2-.5 3.5-.5s2.5.5 3.5.5c2 0 3.5-1.5 3.5-4 0-3.5-3-6-7-6z" />
+        </svg>
+        <p style={{ color: COLORS.textMuted, fontFamily: "monospace", fontSize: 14 }}>🐾 Cargando panel...</p>
       </div>
     </div>
   );
@@ -208,10 +211,14 @@ export default function App() {
       {/* HEADER */}
       <div style={{ background: COLORS.card, borderBottom: `1px solid ${COLORS.cardBorder}`, padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 100, flexWrap: "wrap", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <img src={PAWS_TRACKER_LOGO} alt="Paws Tracker" style={{ width: 40, height: 40, borderRadius: 8, objectFit: "cover" }} />
+          <svg width="28" height="28" viewBox="0 0 24 24" fill={COLORS.accent}>
+            <ellipse cx="6" cy="7" rx="2" ry="3" /><ellipse cx="18" cy="7" rx="2" ry="3" />
+            <ellipse cx="10" cy="4" rx="2" ry="2.5" /><ellipse cx="14" cy="4" rx="2" ry="2.5" />
+            <path d="M12 10c-4 0-7 2.5-7 6 0 2.5 1.5 4 3.5 4 1 0 2-.5 3.5-.5s2.5.5 3.5.5c2 0 3.5-1.5 3.5-4 0-3.5-3-6-7-6z" />
+          </svg>
           <div>
-            <h1 style={{ fontSize: 15, fontWeight: 700, color: COLORS.text }}>PAWS TRACKER</h1>
-            <p style={{ fontSize: 9, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: "0.1em" }}>by Pet Lovers Sitting</p>
+            <h1 style={{ fontSize: 15, fontWeight: 700, color: COLORS.text }}>PAWS TRAINING</h1>
+            <p style={{ fontSize: 9, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: "0.1em" }}>Panel Financiero</p>
           </div>
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
