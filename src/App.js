@@ -88,6 +88,7 @@ export default function App() {
   const [tab, setTab] = useState(0);
   const [showReset, setShowReset] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [saveError, setSaveError] = useState(null);
   const [data, setData] = useState(DEFAULTS);
   const [loaded, setLoaded] = useState(false);
 
@@ -100,7 +101,11 @@ export default function App() {
         setData({ ...DEFAULTS, ...d, empleados: Array.isArray(d.empleados) ? d.empleados : DEFAULTS.empleados });
       }
       setLoaded(true);
-    }, (err) => { console.error("Firebase:", err); setLoaded(true); });
+    }, (err) => {
+      console.error("Firebase read error:", err);
+      setSaveError("Sin conexión con Firebase. Revisa las Security Rules.");
+      setLoaded(true);
+    });
     return () => unsub();
   }, []);
 
@@ -163,8 +168,16 @@ export default function App() {
   // ── Firebase helpers ───────────────────────────────────────────────────────
   const saveToFirebase = async (newData) => {
     setSyncing(true);
-    try { await setDoc(doc(db, "negocios", "paws-training"), newData); } catch (e) { console.error(e); }
-    setTimeout(() => setSyncing(false), 1000);
+    setSaveError(null);
+    try {
+      await setDoc(doc(db, "negocios", "paws-training"), newData);
+    } catch (e) {
+      console.error("Firebase write error:", e);
+      setSaveError(`Error al guardar: ${e.code || e.message}`);
+      setSyncing(false);
+      return;
+    }
+    setTimeout(() => setSyncing(false), 600);
   };
 
   const update = (field, value) => {
@@ -222,8 +235,8 @@ export default function App() {
           </div>
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-          <span style={{ fontSize: 10, color: syncing ? COLORS.textMuted : COLORS.green, fontFamily: "monospace" }}>
-            {syncing ? "💾 Guardando..." : "☁️ Sincronizado"}
+          <span style={{ fontSize: 10, color: saveError ? COLORS.red : syncing ? COLORS.textMuted : COLORS.green, fontFamily: "monospace", maxWidth: 220, textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+            {syncing ? "💾 Guardando..." : saveError ? `❌ ${saveError}` : "☁️ Sincronizado"}
           </span>
           <Badge label={statusLabel} color={statusColor} />
           <Badge label={`${empleados.length} empleados`} color={COLORS.blue} />
